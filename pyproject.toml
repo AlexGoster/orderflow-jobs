@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "orderflow-jobs"
 version = "1.0.0"
-description = "OrderFlow Jobs — REST API заказов с фоновыми и периодическими задачами на Celery"
+description = "OrderFlow Jobs вЂ” REST API Р·Р°РєР°Р·РѕРІ СЃ С„РѕРЅРѕРІС‹РјРё Рё РїРµСЂРёРѕРґРёС‡РµСЃРєРёРјРё Р·Р°РґР°С‡Р°РјРё РЅР° Celery"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -44,14 +44,14 @@ target-version = "py311"
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "UP", "B", "SIM"]
 ignore = [
-    "B008",  # Depends()/Query() in defaults — идиоматично для FastAPI
+    "B008",  # Depends()/Query() in defaults вЂ” РёРґРёРѕРјР°С‚РёС‡РЅРѕ РґР»СЏ FastAPI
 ]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-plugins = ["pydantic.mypy", "sqlalchemy.ext.mypy.plugin"]
-disallow_untyped_decorators = false  # декораторы celery без типов
+plugins = ["pydantic.mypy"]
+disallow_untyped_decorators = false  # РґРµРєРѕСЂР°С‚РѕСЂС‹ celery Р±РµР· С‚РёРїРѕРІ
 
 [[tool.mypy.overrides]]
 module = ["celery", "celery.*", "fakeredis", "fakeredis.*"]
