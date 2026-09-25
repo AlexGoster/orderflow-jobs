@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from typing import Any, Protocol, cast
 
 import redis.asyncio as aioredis
@@ -26,7 +27,10 @@ _client: RedisClient | None = None
 def get_redis() -> RedisClient:
     global _client
     if _client is None:
-        _client = cast(RedisClient, aioredis.from_url(get_settings().redis_url))
+        # redis<7 не аннотирует module-level from_url, поэтому фабрика
+        # типизируется через Callable, чтобы mypy strict проходил на любой версии.
+        factory: Callable[..., Any] = aioredis.from_url
+        _client = cast(RedisClient, factory(get_settings().redis_url))
     return _client
 
 
