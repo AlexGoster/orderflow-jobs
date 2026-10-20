@@ -1,5 +1,6 @@
 import json
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated, Any
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, EmailStr, Field
@@ -40,13 +41,13 @@ class Token(BaseModel):
 class ProductCreate(BaseModel):
     sku: str = Field(min_length=1, max_length=64)
     name: str = Field(min_length=1, max_length=255)
-    price: float = Field(gt=0)
-    stock: int = Field(default=0, ge=0)
+    price: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
+    stock: int = Field(default=0, ge=0, le=2_147_483_647)
 
 
 class ProductUpdate(BaseModel):
     name: str | None = Field(default=None, min_length=1, max_length=255)
-    price: float | None = Field(default=None, gt=0)
+    price: Decimal | None = Field(default=None, gt=0, max_digits=10, decimal_places=2)
     stock: int | None = Field(default=None, ge=0)
 
 

@@ -1,5 +1,7 @@
 # OrderFlow Jobs
 
+[Проверенный запуск и ограничения](VERIFICATION.md).
+
 [![CI](https://github.com/AlexGoster/orderflow-jobs/actions/workflows/ci.yml/badge.svg)](https://github.com/AlexGoster/orderflow-jobs/actions/workflows/ci.yml)
 ![Python](https://img.shields.io/badge/python-3.11%2B-blue)
 ![Coverage](https://img.shields.io/badge/coverage-95%25-brightgreen)
@@ -78,7 +80,7 @@ pytest --cov=app
 
 ## Тесты
 
-**25 тестов, покрытие 95%**: auth, products (включая HIT/MISS и инвалидацию кэша), orders, выполнение Celery-задач в eager mode, трекинг статусов, beat-расписание, политика ретраев. CI гоняет `ruff → mypy (strict) → pytest --cov → docker build`.
+**31 тест**: auth, products (включая HIT/MISS и инвалидацию кэша), orders, выполнение Celery-задач в eager mode, трекинг статусов, beat-расписание, политика ретраев. CI гоняет `ruff → mypy (strict) → pytest --cov → docker build`.
 
 ## Метрики
 
