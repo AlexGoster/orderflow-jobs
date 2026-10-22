@@ -14,11 +14,13 @@
 python -m venv .venv
 # Активируйте .venv согласно ОС.
 python -m pip install . -r requirements-dev.txt
-python -m alembic upgrade head
 python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 Тесты в отдельном тестовом окружении:
+
+В этой версии jobs нет Alembic-миграций. Таблицы новой БД создаются при старте
+через `Base.metadata.create_all`; это не обновляет схему уже существующей БД.
 
 ```bash
 python -m pytest -o addopts= -q
