@@ -12,6 +12,8 @@ COPY pyproject.toml README.md ./
 COPY app ./app
 RUN pip install .
 
+RUN mkdir -p /app/data/invoices && chown -R app:app /app/data
+
 USER app
 EXPOSE 8000
 

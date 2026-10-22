@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import AppError, NotFoundError
@@ -17,17 +17,23 @@ async def create_order(session: AsyncSession, user_id: int, payload: OrderCreate
     await session.flush()
 
     total = Decimal("0")
-    for item in payload.items:
+    for item in sorted(payload.items, key=lambda item: item.product_id):
         product = await session.get(Product, item.product_id)
         if product is None:
             raise NotFoundError(f"Product {item.product_id} not found")
-        if product.stock < item.quantity:
+        reserved = await session.scalar(
+            update(Product)
+            .where(Product.id == item.product_id, Product.stock >= item.quantity)
+            .values(stock=Product.stock - item.quantity)
+            .returning(Product.id)
+            .execution_options(synchronize_session=False)
+        )
+        if reserved is None:
             raise AppError(
                 f"Insufficient stock for {product.sku}: {product.stock} left",
                 code="insufficient_stock",
                 status_code=409,
             )
-        product.stock -= item.quantity
         total += Decimal(str(product.price)) * item.quantity
         session.add(
             OrderItem(
@@ -39,6 +45,10 @@ async def create_order(session: AsyncSession, user_id: int, payload: OrderCreate
         )
 
     order.total = total
+    if total > Decimal("99999999.99"):
+        raise AppError(
+            "Order total exceeds supported amount", code="invalid_total", status_code=422
+        )
     await session.commit()
     await session.refresh(order)
 

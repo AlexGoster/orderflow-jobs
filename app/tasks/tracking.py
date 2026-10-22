@@ -1,4 +1,5 @@
 import functools
+import inspect
 import json
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -9,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.database import get_sync_session_factory
-from app.models import TaskState, TaskStatus
+from app.models import Order, TaskOwnership, TaskState, TaskStatus
 
 P = ParamSpec("P")
 R = TypeVar("R")
@@ -19,7 +20,7 @@ def _find_state(session: Session, task_id: str) -> TaskState | None:
     return session.scalar(select(TaskState).where(TaskState.celery_task_id == task_id))
 
 
-def _begin(name: str, task_id: str | None) -> int:
+def _begin(name: str, task_id: str | None, order_id: int | None) -> int:
     """Создаёт или переиспользует запись статуса (её же обновляет каждая попытка)."""
     with get_sync_session_factory()() as session:
         state = _find_state(session, task_id) if task_id is not None else None
@@ -36,6 +37,11 @@ def _begin(name: str, task_id: str | None) -> int:
             state.attempts += 1
             state.error = None
             state.finished_at = None
+        session.flush()
+        if order_id is not None and session.get(TaskOwnership, state.id) is None:
+            order = session.get(Order, order_id)
+            if order is not None:
+                session.add(TaskOwnership(task_id=state.id, user_id=order.user_id))
         session.commit()
         session.refresh(state)
         return state.id
@@ -74,7 +80,9 @@ def track_task(func: Callable[P, R]) -> Callable[P, R]:
         task_id = task.request.id if task is not None else None
         name = (task.name if task is not None else None) or func.__name__
 
-        state_id = _begin(name, task_id)
+        # Bind by the actual signature: Celery supports both positional and keyword arguments.
+        order_id = inspect.signature(func).bind(*args, **kwargs).arguments.get("order_id")
+        state_id = _begin(name, task_id, order_id)
         try:
             result = func(*args, **kwargs)
         except Exception as exc:

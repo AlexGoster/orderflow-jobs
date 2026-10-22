@@ -25,7 +25,9 @@ _sync_session_factory: sessionmaker[Session] | None = None
 
 def to_sync_url(url: str) -> str:
     """Async URL -> прямой драйвер (нужен Celery-воркеру: он работает без event loop)."""
-    return url.replace("+aiosqlite", "").replace("+asyncpg", "")
+    return url.replace("postgresql+asyncpg://", "postgresql+psycopg2://").replace(
+        "sqlite+aiosqlite://", "sqlite://"
+    )
 
 
 def get_engine() -> AsyncEngine:
