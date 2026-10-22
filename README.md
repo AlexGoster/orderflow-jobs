@@ -51,8 +51,8 @@ sequenceDiagram
 | Метод | Путь | Описание |
 |---|---|---|
 | POST | `/api/v1/orders/{id}/invoice` | `202` + `task_id` + `status_url` |
-| GET | `/api/v1/tasks/{task_ref}` | Статус задачи (по celery id или числовому id) |
-| GET | `/api/v1/tasks` | Список задач |
+| GET | `/api/v1/tasks/{task_ref}` | Статус своей задачи (по celery id или числовому id); чужая — 404 |
+| GET | `/api/v1/tasks` | Список только своих задач |
 | — | остальные маршруты core | auth, products, orders |
 
 Плюс кэш каталога в Redis (cache-aside, инвалидация при изменении) — фундамент для [orderflow-scale](https://github.com/AlexGoster/orderflow-scale).
@@ -71,6 +71,13 @@ docker compose up -d
 
 Состав стека: `db`, `redis`, `api`, `worker`, `beat`, `flower`.
 
+При обновлении существующей установки сначала остановите `worker` и `beat`,
+пересоберите образы и запустите API. При старте API автоматически добавит таблицу
+`task_ownerships` через `create_all`, сохранив существующие данные. После готовности
+`/health` запускайте обновлённые `worker` и `beat`. Старые задачи без достоверного
+владельца и системные задачи не отображаются в пользовательском API. Flower —
+отдельный административный интерфейс, пользовательские ограничения API к нему не относятся.
+
 Локальная разработка и тесты (без Redis и Postgres — Celery в eager mode, Redis через fakeredis):
 
 ```bash
@@ -80,7 +87,11 @@ pytest --cov=app
 
 ## Тесты
 
-**31 тест**: auth, products (включая HIT/MISS и инвалидацию кэша), orders, выполнение Celery-задач в eager mode, трекинг статусов, beat-расписание, политика ретраев. CI гоняет `ruff → mypy (strict) → pytest --cov → docker build`.
+Тесты проверяют auth, products (включая HIT/MISS и инвалидацию кэша), orders,
+выполнение Celery-задач в eager mode, трекинг статусов, beat-расписание и ретраи.
+Проверки приватности охватывают два пользователя, все статусы задач, числовой и
+Celery ID, пагинацию, владельца до запуска worker и обновление старой БД.
+CI гоняет `ruff → mypy (strict) → pytest --cov → docker build`.
 
 ## Метрики
 
