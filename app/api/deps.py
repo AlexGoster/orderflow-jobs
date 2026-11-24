@@ -20,7 +20,13 @@ async def get_current_user(
     subject = decode_access_token(credentials.credentials)
     if subject is None:
         raise UnauthorizedError("Invalid or expired token")
-    user = await session.scalar(select(User).where(User.id == int(subject)))
+    try:
+        user_id = int(subject)
+    except ValueError:
+        raise UnauthorizedError("Invalid token subject") from None
+    if not 0 < user_id <= 2_147_483_647:
+        raise UnauthorizedError("Invalid token subject")
+    user = await session.scalar(select(User).where(User.id == user_id))
     if user is None:
         raise UnauthorizedError("User no longer exists")
     return user

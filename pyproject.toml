@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "orderflow-jobs"
 version = "1.0.0"
-description = "OrderFlow Jobs вЂ” REST API Р·Р°РєР°Р·РѕРІ СЃ С„РѕРЅРѕРІС‹РјРё Рё РїРµСЂРёРѕРґРёС‡РµСЃРєРёРјРё Р·Р°РґР°С‡Р°РјРё РЅР° Celery"
+description = "OrderFlow Jobs — REST API заказов с фоновыми и периодическими задачами на Celery"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

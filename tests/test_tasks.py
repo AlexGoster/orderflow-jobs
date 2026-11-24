@@ -1,12 +1,13 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.celery_app import celery_app
 from app.core.database import get_sync_session_factory
-from app.models import DailyStat, Order, OrderStatus, TaskState, TaskStatus
+from app.models import DailyStat, Order, OrderStatus, TaskOwnership, TaskState, TaskStatus, User
 from app.tasks import generate_invoice_pdf, recompute_daily_stats, send_order_email
 
 
@@ -143,6 +144,108 @@ async def test_task_not_found_returns_404(
 
 async def test_tasks_require_auth(client: AsyncClient) -> None:
     assert (await client.get("/api/v1/tasks")).status_code == 401
+
+
+@pytest.mark.parametrize("status", list(TaskStatus))
+async def test_tasks_are_private_in_all_states(
+    client: AsyncClient, auth_headers: dict[str, str], status: TaskStatus
+) -> None:
+    from app.core.security import create_access_token
+
+    with get_sync_session_factory()() as session:
+        owner = session.scalar(select(User).where(User.email == "user@example.com"))
+        assert owner is not None
+        other = User(email="other@example.com", password_hash="unused")
+        session.add(other)
+        session.flush()
+        other_token = create_access_token(str(other.id))
+        owned = TaskState(name="owned", status=status, celery_task_id="owned-uuid")
+        foreign = TaskState(name="foreign", status=status, celery_task_id="foreign-uuid")
+        legacy = TaskState(name="legacy", status=status, celery_task_id="legacy-uuid")
+        session.add_all([owned, foreign, legacy])
+        session.flush()
+        session.add_all(
+            [
+                TaskOwnership(task_id=owned.id, user_id=owner.id),
+                TaskOwnership(task_id=foreign.id, user_id=other.id),
+            ]
+        )
+        session.commit()
+        owned_id, foreign_id, legacy_id = owned.id, foreign.id, legacy.id
+
+    other_headers = {"Authorization": f"Bearer {other_token}"}
+    for reference in (str(owned_id), "owned-uuid"):
+        assert (
+            await client.get(f"/api/v1/tasks/{reference}", headers=auth_headers)
+        ).status_code == 200
+        assert (
+            await client.get(f"/api/v1/tasks/{reference}", headers=other_headers)
+        ).status_code == 404
+    for reference in (str(foreign_id), "foreign-uuid", str(legacy_id), "legacy-uuid"):
+        assert (
+            await client.get(f"/api/v1/tasks/{reference}", headers=auth_headers)
+        ).status_code == 404
+    page = await client.get("/api/v1/tasks?limit=1", headers=auth_headers)
+    assert [item["id"] for item in page.json()] == [owned_id]
+    assert (await client.get("/api/v1/tasks?offset=1", headers=auth_headers)).json() == []
+    assert [
+        item["id"] for item in (await client.get("/api/v1/tasks", headers=other_headers)).json()
+    ] == [foreign_id]
+
+
+async def test_email_positional_retry_preserves_owner(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    from app.core.security import create_access_token
+
+    order_id = await _create_order(client, auth_headers)
+    for _ in range(2):
+        assert send_order_email.apply(args=[order_id], task_id="retry-uuid").successful()
+    response = await client.get("/api/v1/tasks/retry-uuid", headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["attempts"] == 2
+    assert response.json()["result"]["to"] == "user@example.com"
+    with get_sync_session_factory()() as session:
+        other = User(email="other@example.com", password_hash="unused")
+        session.add(other)
+        session.commit()
+        token = create_access_token(str(other.id))
+    other_headers = {"Authorization": f"Bearer {token}"}
+    for reference in ("retry-uuid", str(response.json()["id"])):
+        denied = await client.get(f"/api/v1/tasks/{reference}", headers=other_headers)
+        assert denied.status_code == 404
+    assert (await client.get("/api/v1/tasks", headers=other_headers)).json() == []
+
+
+async def test_invoice_has_owner_before_worker_runs(
+    client: AsyncClient, auth_headers: dict[str, str], monkeypatch
+) -> None:
+    order_id = await _create_order(client, auth_headers)
+    monkeypatch.setattr(generate_invoice_pdf, "apply_async", lambda **kwargs: None)
+    accepted = await client.post(f"/api/v1/orders/{order_id}/invoice", headers=auth_headers)
+    assert accepted.status_code == 202
+    response = await client.get(accepted.json()["status_url"], headers=auth_headers)
+    assert response.status_code == 200
+    assert response.json()["status"] == "pending"
+
+
+async def test_existing_database_adds_ownership_without_exposing_legacy_tasks(
+    client: AsyncClient, auth_headers: dict[str, str]
+) -> None:
+    from app.core.database import get_engine
+    from app.main import init_db
+
+    with get_sync_session_factory()() as session:
+        session.add(TaskState(name="legacy", celery_task_id="old-uuid"))
+        session.commit()
+    async with get_engine().begin() as conn:
+        await conn.run_sync(TaskOwnership.__table__.drop)
+    await init_db()
+    await init_db()  # Startup is safe to repeat.
+    with get_sync_session_factory()() as session:
+        assert session.scalar(select(TaskState).where(TaskState.celery_task_id == "old-uuid"))
+    assert (await client.get("/api/v1/tasks/old-uuid", headers=auth_headers)).status_code == 404
+    assert (await client.get("/api/v1/tasks", headers=auth_headers)).json() == []
 
 
 async def test_beat_schedule_configuration(client: AsyncClient) -> None:

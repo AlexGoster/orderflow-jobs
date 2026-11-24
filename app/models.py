@@ -102,6 +102,17 @@ class TaskState(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
+class TaskOwnership(Base):
+    """Private task access; a separate table also upgrades existing databases safely."""
+
+    __tablename__ = "task_ownerships"
+
+    task_id: Mapped[int] = mapped_column(
+        ForeignKey("task_states.id", ondelete="CASCADE"), primary_key=True
+    )
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+
+
 class DailyStat(Base):
     __tablename__ = "daily_stats"
 

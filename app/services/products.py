@@ -3,6 +3,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
@@ -72,7 +73,13 @@ async def create_product(session: AsyncSession, payload: ProductCreate) -> Produ
         raise ConflictError(f"SKU {payload.sku} already exists")
     product = Product(**payload.model_dump())
     session.add(product)
-    await session.commit()
+    try:
+        await session.commit()
+    except IntegrityError:
+        await session.rollback()
+        if await session.scalar(select(Product).where(Product.sku == payload.sku)) is not None:
+            raise ConflictError(f"SKU {payload.sku} already exists") from None
+        raise
     await session.refresh(product)
     return product
 

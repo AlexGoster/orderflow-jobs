@@ -32,3 +32,8 @@ invoices/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local verification artifacts
+*.egg-info/
+build/
+dist/

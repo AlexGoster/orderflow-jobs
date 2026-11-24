@@ -4,6 +4,7 @@ x-app-env: &app-env
   CELERY_BROKER_URL: redis://redis:6379/0
   CELERY_RESULT_BACKEND: redis://redis:6379/1
   SECRET_KEY: dev-secret-do-not-use-in-production
+  INVOICE_DIR: /app/data/invoices
 
 services:
   db:
@@ -34,6 +35,8 @@ services:
       <<: *app-env
     ports:
       - "8000:8000"
+    volumes:
+      - invoices:/app/data/invoices
     depends_on:
       db:
         condition: service_healthy
@@ -45,7 +48,11 @@ services:
     environment:
       <<: *app-env
     command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    volumes:
+      - invoices:/app/data/invoices
     depends_on:
+      api:
+        condition: service_started
       db:
         condition: service_healthy
       redis:
@@ -55,8 +62,10 @@ services:
     build: .
     environment:
       <<: *app-env
-    command: celery -A app.celery_app beat --loglevel=info
+    command: celery -A app.celery_app beat --loglevel=info --schedule=/tmp/celerybeat-schedule
     depends_on:
+      api:
+        condition: service_started
       redis:
         condition: service_healthy
 
@@ -73,3 +82,4 @@ services:
 
 volumes:
   pgdata:
+  invoices:

@@ -55,7 +55,7 @@ async def request_invoice(
     """Ставит генерацию счёта в очередь и сразу возвращает task_id для polling."""
     order = await orders_service.get_order(session, user.id, order_id)
     state = await tasks_service.create_task_state(
-        session, name=generate_invoice_pdf.name or "tasks.generate_invoice_pdf"
+        session, name=generate_invoice_pdf.name or "tasks.generate_invoice_pdf", user_id=user.id
     )
     generate_invoice_pdf.apply_async(kwargs={"order_id": order.id}, task_id=state.celery_task_id)
     await session.refresh(state)
